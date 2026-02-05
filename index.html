@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>西安旅游 (000610.SZ) 暴跌后市分析与决策系统</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Font Awesome (for icons, avoiding SVG directly) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Custom Config & Styles -->
+    <style>
+        /* Chosen Palette: Warm Neutral / Financial
+           Background: Slate-50 (Warm Gray)
+           Primary: Slate-800 (Dark Gray)
+           Accent (Bullish): Emerald-600
+           Accent (Bearish): Rose-600
+           Accent (Info): Blue-600
+        */
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+            color: #1e293b; /* slate-800 */
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            height: 350px;
+            max-height: 400px; 
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+
+        .nav-item.active {
+            background-color: #e2e8f0; /* slate-200 */
+            border-left: 4px solid #0f172a; /* slate-900 */
+            font-weight: 600;
+        }
+
+        .card {
+            background: white;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            margin-top: -6px; 
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+    </style>
+
+    <!-- 
+    Placeholder Comments Required:
+    
+    <!-- Chosen Palette: Warm Neutral Financial (Slate, Emerald, Rose) to convey professionalism and clarity in financial data. -->
+    
+    <!-- Application Structure Plan: 
+         Structure: Dashboard Layout with Sidebar Navigation.
+         Why: Typical financial analysis requires moving between different "lenses" (Technical, Fundamental, Risk). A dashboard structure allows the user to digest the "Market Overview" first, then drill down into specifics without losing context.
+         1. Overview: Immediate impact visualization (Price drop).
+         2. Technical: Timing the entry (RSI, Support).
+         3. Fundamental: Validating the value (Earnings).
+         4. Simulation: Personalizing the risk (Calculator).
+         This flow moves from Observation -> Analysis -> Validation -> Action.
+    -->
+    
+    <!-- Visualization & Content Choices:
+         1. Price/Volume Chart (Chart.js Line/Bar): 
+            - Goal: Show the magnitude of the crash.
+            - Interaction: Timeframe toggle.
+         2. RSI Gauge/Chart (Chart.js Line):
+            - Goal: visualize "Oversold" conditions.
+            - Interaction: None (static reference).
+         3. Financial Bar Chart (Chart.js Bar):
+            - Goal: Compare Revenue vs Profit to show recovery status.
+            - Interaction: Toggle dataset.
+         4. Risk/Reward Calculator (HTML/JS Inputs + Dynamic Bar):
+            - Goal: Let user calculate their own P&L based on entry price.
+            - Interaction: Sliders/Inputs update the DOM immediately.
+         
+         Justification: Chart.js is robust for financial time-series. HTML/Tailwind used for layout and simple metric cards. NO SVG/Mermaid used.
+    -->
+    
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    -->
+</head>
+<body class="flex flex-col md:flex-row min-h-screen">
+
+    <!-- Mobile Header -->
+    <header class="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-50">
+        <div class="font-bold text-lg"><i class="fas fa-chart-line mr-2"></i>西安旅游分析</div>
+        <button id="mobile-menu-btn" class="text-white hover:text-gray-300">
+            <i class="fas fa-bars fa-lg"></i>
+        </button>
+    </header>
+
+    <!-- Sidebar Navigation -->
+    <nav id="sidebar" class="bg-white w-full md:w-64 flex-shrink-0 md:h-screen fixed md:sticky top-0 hidden md:flex flex-col border-r border-slate-200 z-40 transition-all duration-300">
+        <div class="p-6 bg-slate-900 text-white hidden md:block">
+            <h1 class="text-xl font-bold tracking-tight">投资决策辅助</h1>
+            <p class="text-slate-400 text-xs mt-1">代码: 000610.SZ</p>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto py-4">
+            <ul class="space-y-1">
+                <li>
+                    <button onclick="navigate('overview')" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 transition-colors active" data-target="overview">
+                        <i class="fas fa-home w-6 text-center mr-2"></i> 市场概览
+                    </button>
+                </li>
+                <li>
+                    <button onclick="navigate('technical')" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 transition-colors" data-target="technical">
+                        <i class="fas fa-ruler-combined w-6 text-center mr-2"></i> 技术面分析
+                    </button>
+                </li>
+                <li>
+                    <button onclick="navigate('fundamental')" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 transition-colors" data-target="fundamental">
+                        <i class="fas fa-building w-6 text-center mr-2"></i> 基本面诊断
+                    </button>
+                </li>
+                <li>
+                    <button onclick="navigate('simulation')" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 transition-colors" data-target="simulation">
+                        <i class="fas fa-calculator w-6 text-center mr-2"></i> 盈亏模拟器
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <div class="p-4 border-t border-slate-200">
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                <p class="text-xs text-blue-800 font-semibold"><i class="fas fa-info-circle mr-1"></i> 数据提示</p>
+                <p class="text-xs text-blue-600 mt-1">分析基于模拟近期市场数据。股市有风险，入市需谨慎。</p>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 bg-slate-50 p-4 md:p-8 overflow-y-auto h-screen">
+        
+        <!-- SECTION: MARKET OVERVIEW -->
+        <section id="overview" class="content-section space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+                <div>
+                    <h2 class="text-2xl md:text-3xl font-bold text-slate-800">市场暴跌概览</h2>
+                    <p class="text-slate-500 mt-1">当前状态：<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">空头主导</span> <span class="text-xs ml-2">数据更新: 刚刚</span></p>
+                </div>
+                <div class="mt-4 md:mt-0 flex gap-2">
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded shadow-sm text-sm" onclick="alert('数据已刷新')"><i class="fas fa-sync-alt mr-1"></i> 刷新</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                <p class="text-slate-600 mb-4 leading-relaxed">
+                    <strong>本节摘要：</strong> 西安旅游（000610）近期遭遇剧烈调整，股价短期内快速下挫。本页面旨在展示当前的下跌幅度与成交量配合情况，帮助投资者判断是否出现恐慌性抛盘（Panic Selling）。重点关注成交量的放大，这往往是短期见底的信号之一。
+                </p>
+            </div>
+
+            <!-- Key Metrics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="card p-5 border-l-4 border-red-500">
+                    <p class="text-sm text-slate-500 font-medium">当前价格 (¥)</p>
+                    <div class="flex items-baseline mt-1">
+                        <span class="text-3xl font-bold text-slate-800" id="current-price">12.45</span>
+                        <span class="ml-2 text-sm font-semibold text-red-600">-5.2% <i class="fas fa-arrow-down"></i></span>
+                    </div>
+                </div>
+                <div class="card p-5 border-l-4 border-slate-400">
+                    <p class="text-sm text-slate-500 font-medium">5日跌幅</p>
+                    <div class="flex items-baseline mt-1">
+                        <span class="text-3xl font-bold text-slate-800">-18.4%</span>
+                        <span class="ml-2 text-sm text-slate-400">短期超跌</span>
+                    </div>
+                </div>
+                <div class="card p-5 border-l-4 border-blue-500">
+                    <p class="text-sm text-slate-500 font-medium">换手率</p>
+                    <div class="flex items-baseline mt-1">
+                        <span class="text-3xl font-bold text-slate-800">12.8%</span>
+                        <span class="ml-2 text-sm text-blue-600">活跃</span>
+                    </div>
+                </div>
+                <div class="card p-5 border-l-4 border-orange-500">
+                    <p class="text-sm text-slate-500 font-medium">RSI (14)</p>
+                    <div class="flex items-baseline mt-1">
+                        <span class="text-3xl font-bold text-orange-600">24.5</span>
+                        <span class="ml-2 text-sm text-orange-600">严重超卖</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Chart Area -->
+            <div class="card p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-slate-800">股价走势与成交量 (近30日)</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="updateMainChart('7d')" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded transition">近7日</button>
+                        <button onclick="updateMainChart('30d')" class="text-xs bg-slate-800 text-white px-3 py-1 rounded transition shadow">近30日</button>
+                    </div>
+                </div>
+                <!-- CHART CONTAINER -->
+                <div class="chart-container">
+                    <canvas id="mainPriceChart"></canvas>
+                </div>
+                <p class="text-xs text-slate-400 mt-2 text-center">图表展示了近期价格的单边下行趋势，成交量柱状图显示抛压释放情况。</p>
+            </div>
+        </section>
+
+        <!-- SECTION: TECHNICAL ANALYSIS -->
+        <section id="technical" class="content-section space-y-6 hidden">
+            <div>
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-800">技术面分析</h2>
+                <p class="text-slate-500 mt-1">寻找支撑位与反弹信号</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                <p class="text-slate-600 mb-4 leading-relaxed">
+                    <strong>技术解读：</strong> 当前股价已击穿多条均线支撑，进入空头排列。但 <strong>RSI 指标</strong> 进入了20-30的超卖区间，从历史概率看，这往往预示着技术性反弹的需求。下方关键支撑位在 11.80 元附近（前期成交密集区）。
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- RSI Analysis -->
+                <div class="card p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">RSI 相对强弱指标</h3>
+                    <div class="chart-container" style="height: 250px;">
+                        <canvas id="rsiChart"></canvas>
+                    </div>
+                    <div class="mt-4 flex items-center justify-between text-sm">
+                        <div class="flex items-center"><span class="w-3 h-3 bg-red-500 rounded-full mr-2"></span>超买 (>70)</div>
+                        <div class="flex items-center"><span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span>超卖 (<30)</div>
+                    </div>
+                </div>
+
+                <!-- Support/Resistance Interactive -->
+                <div class="card p-6 flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">关键点位模拟</h3>
+                        <p class="text-sm text-slate-500 mb-6">滑动查看不同价格区间的操作建议。</p>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="flex justify-between text-sm font-medium text-slate-700 mb-1">
+                                    <span>假设当前价格:</span>
+                                    <span id="tech-price-display" class="text-blue-600">12.45</span>
+                                </label>
+                                <input type="range" min="10" max="15" step="0.1" value="12.45" id="tech-price-slider" class="w-full">
+                                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                                    <span>¥10.00</span>
+                                    <span>¥15.00</span>
+                                </div>
+                            </div>
+                            
+                            <div id="tech-advice-box" class="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+                                <h4 class="font-bold text-orange-800 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i> 观望区域</h4>
+                                <p class="text-sm text-orange-700">股价处于下跌中继，未触及强支撑，建议等待止跌信号。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-6 border-t pt-4">
+                        <h4 class="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">历史支撑参考</h4>
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            <div class="bg-slate-100 rounded p-2">
+                                <span class="block text-xs text-slate-500">支撑 1</span>
+                                <span class="font-bold text-slate-700">11.80</span>
+                            </div>
+                            <div class="bg-slate-100 rounded p-2">
+                                <span class="block text-xs text-slate-500">支撑 2</span>
+                                <span class="font-bold text-slate-700">10.50</span>
+                            </div>
+                            <div class="bg-slate-100 rounded p-2">
+                                <span class="block text-xs text-slate-500">压力</span>
+                                <span class="font-bold text-slate-700">13.60</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: FUNDAMENTAL DATA -->
+        <section id="fundamental" class="content-section space-y-6 hidden">
+            <div>
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-800">基本面诊断</h2>
+                <p class="text-slate-500 mt-1">业绩能否支撑估值修复？</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                <p class="text-slate-600 mb-4 leading-relaxed">
+                    <strong>基本面概览：</strong> 旅游行业在后疫情时代迎来复苏，但西安旅游的业绩波动依然较大。虽然营收（Revenue）呈现复苏增长态势，但净利润（Net Profit）仍面临挑战。本次暴跌可能包含对业绩不及预期的重新定价。
+                </p>
+            </div>
+
+            <div class="card p-6">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold text-slate-800">季度业绩趋势 (亿元)</h3>
+                    <div class="bg-slate-100 p-1 rounded-lg flex space-x-1 mt-2 sm:mt-0">
+                        <button class="px-4 py-1.5 rounded-md text-sm font-medium bg-white text-slate-800 shadow transition" id="btn-revenue" onclick="toggleFundamental('revenue')">营业收入</button>
+                        <button class="px-4 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-800 transition" id="btn-profit" onclick="toggleFundamental('profit')">净利润</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="fundamentalChart"></canvas>
+                </div>
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div class="bg-green-50 p-3 rounded border border-green-100">
+                        <span class="font-bold text-green-700">利好因素：</span>
+                        <span class="text-green-800">国内长假旅游预订数据回暖，西安作为热门目的地流量稳定。</span>
+                    </div>
+                    <div class="bg-red-50 p-3 rounded border border-red-100">
+                        <span class="font-bold text-red-700">风险因素：</span>
+                        <span class="text-red-800">公司近年来扣非净利润持续承压，高估值缺乏强业绩支撑。</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: SIMULATION -->
+        <section id="simulation" class="content-section space-y-6 hidden">
+            <div>
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-800">交易模拟器</h2>
+                <p class="text-slate-500 mt-1">计算抄底的风险收益比 (Risk/Reward)</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                <p class="text-slate-600 mb-4 leading-relaxed">
+                    <strong>操作指南：</strong> 在下方输入您的计划买入价格、止损价格和目标止盈价格。系统将自动计算这笔交易的潜在盈亏比例。如果<strong>盈亏比低于 1:2</strong>，通常不建议入场。
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Inputs -->
+                <div class="card p-6 lg:col-span-1 space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">计划买入价 (¥)</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2 text-slate-400">¥</span>
+                            <input type="number" id="sim-buy" value="12.45" step="0.01" class="w-full pl-8 pr-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">止损价 (¥) <span class="text-xs text-red-500">(-5% 风控)</span></label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2 text-slate-400">¥</span>
+                            <input type="number" id="sim-loss" value="11.80" step="0.01" class="w-full pl-8 pr-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-red-500 focus:outline-none transition">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">目标价 (¥) <span class="text-xs text-green-500">(反弹预期)</span></label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2 text-slate-400">¥</span>
+                            <input type="number" id="sim-target" value="13.80" step="0.01" class="w-full pl-8 pr-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-green-500 focus:outline-none transition">
+                        </div>
+                    </div>
+                    <button id="btn-calc" class="w-full bg-slate-800 text-white py-2 rounded hover:bg-slate-700 transition font-medium">重新计算</button>
+                </div>
+
+                <!-- Visualization -->
+                <div class="card p-6 lg:col-span-2 flex flex-col justify-center items-center">
+                    <h3 class="text-lg font-bold text-slate-800 mb-6 w-full text-left">模拟结果分析</h3>
+                    
+                    <div class="w-full flex items-center justify-center space-x-1 mb-8 relative h-16">
+                        <!-- Loss Bar -->
+                        <div id="bar-loss" class="bg-red-500 h-8 rounded-l flex items-center justify-center text-white text-xs font-bold transition-all duration-500 relative" style="width: 30%">
+                            <span class="absolute -bottom-6 text-red-600 font-semibold" id="text-loss-amt">-¥0.65</span>
+                            潜在亏损
+                        </div>
+                        <!-- Center Line -->
+                        <div class="w-1 h-12 bg-slate-800 z-10"></div>
+                        <!-- Profit Bar -->
+                        <div id="bar-profit" class="bg-emerald-500 h-8 rounded-r flex items-center justify-center text-white text-xs font-bold transition-all duration-500 relative" style="width: 70%">
+                            <span class="absolute -bottom-6 text-emerald-600 font-semibold" id="text-profit-amt">+¥1.35</span>
+                            潜在盈利
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-8 w-full text-center">
+                        <div>
+                            <p class="text-slate-500 text-sm">盈亏比 (R/R Ratio)</p>
+                            <p class="text-3xl font-bold text-slate-800 mt-1" id="val-rr">2.1</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-sm">决策建议</p>
+                            <p class="text-xl font-bold mt-2 px-3 py-1 rounded inline-block" id="val-advice">可以尝试</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-slate-50 p-4 rounded text-sm text-slate-600 w-full">
+                        <p><i class="fas fa-lightbulb text-yellow-500 mr-2"></i><strong>分析师提示：</strong> 如果盈亏比大于 2.0 且止损位在重要技术支撑下方，则该交易具有较高的数学期望值。反之，请耐心等待价格更低或止损空间更小时再入场。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- State Management ---
+        const state = {
+            currentSection: 'overview',
+            fundamentalMode: 'revenue', // 'revenue' or 'profit'
+            simData: {
+                buy: 12.45,
+                loss: 11.80,
+                target: 13.80
+            }
+        };
+
+        // --- Mock Data (Simulating Source Report Data) ---
+        const data = {
+            priceHistory: {
+                labels: Array.from({length: 30}, (_, i) => `T-${30-i}`),
+                price: [15.2, 15.1, 15.3, 15.0, 14.8, 14.9, 14.6, 14.5, 14.2, 14.0, 13.8, 13.5, 13.2, 12.8, 12.5, 12.6, 12.4, 12.2, 12.0, 12.1, 12.3, 12.5, 12.8, 13.0, 12.8, 12.6, 12.5, 12.4, 12.3, 12.45],
+                volume: [50, 45, 55, 48, 60, 52, 70, 80, 120, 150, 180, 200, 250, 300, 350, 200, 150, 120, 100, 110, 130, 140, 160, 150, 140, 130, 120, 110, 105, 90]
+            },
+            fundamentals: {
+                quarters: ['23Q1', '23Q2', '23Q3', '23Q4', '24Q1', '24Q2'],
+                revenue: [1.2, 1.8, 2.5, 1.9, 1.4, 2.1], // In 100M CNY
+                profit: [-0.3, -0.1, 0.1, -0.2, -0.15, 0.05]
+            }
+        };
+
+        // --- Chart Instances ---
+        let mainChartInstance = null;
+        let rsiChartInstance = null;
+        let fundamentalChartInstance = null;
+
+        // --- Navigation Logic ---
+        function navigate(targetId) {
+            // Update UI State
+            document.querySelectorAll('.content-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(targetId).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active', 'bg-slate-50', 'border-l-4', 'border-slate-900', 'font-semibold'));
+            const activeNav = document.querySelector(`.nav-item[data-target="${targetId}"]`);
+            if(activeNav) {
+                activeNav.classList.add('active');
+            }
+
+            state.currentSection = targetId;
+
+            // Trigger Chart Resizes/Renders if needed
+            if(targetId === 'technical' && rsiChartInstance) {
+                rsiChartInstance.resize();
+            }
+            if(targetId === 'fundamental' && fundamentalChartInstance) {
+                fundamentalChartInstance.resize();
+            }
+
+            // Close mobile menu if open
+            if (window.innerWidth < 768) {
+                 document.getElementById('sidebar').classList.add('hidden');
+            }
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initMainChart();
+            initRSIChart();
+            initFundamentalChart();
+            initSimulation();
+            setupMobileMenu();
+        });
+
+        // --- Chart.js Implementations ---
+
+        // 1. Main Price Chart
+        function initMainChart() {
+            const ctx = document.getElementById('mainPriceChart').getContext('2d');
+            
+            // Gradient for the area under the line
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(239, 68, 68, 0.2)'); // Redish tint
+            gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
+
+            mainChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.priceHistory.labels,
+                    datasets: [{
+                        label: '股价 (CNY)',
+                        data: data.priceHistory.price,
+                        borderColor: '#ef4444', // Red for bearish trend
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.3,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: '成交量',
+                        data: data.priceHistory.volume,
+                        type: 'bar',
+                        backgroundColor: '#94a3b8',
+                        yAxisID: 'y1',
+                        barThickness: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleFont: { family: 'Inter' },
+                            bodyFont: { family: 'Inter' },
+                            padding: 10,
+                            cornerRadius: 4
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: { borderDash: [2, 4], color: '#e2e8f0' },
+                            title: { display: true, text: '价格' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: false, // Hide volume scale numbers
+                            position: 'right',
+                            grid: { display: false },
+                            min: 0,
+                            max: Math.max(...data.priceHistory.volume) * 4 // Push bars down
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateMainChart(period) {
+            // Simulation of changing data based on period
+            let newDataCount = period === '7d' ? 7 : 30;
+            const newLabels = data.priceHistory.labels.slice(-newDataCount);
+            const newPrice = data.priceHistory.price.slice(-newDataCount);
+            const newVol = data.priceHistory.volume.slice(-newDataCount);
+
+            mainChartInstance.data.labels = newLabels;
+            mainChartInstance.data.datasets[0].data = newPrice;
+            mainChartInstance.data.datasets[1].data = newVol;
+            mainChartInstance.update();
+        }
+
+        // 2. RSI Chart
+        function initRSIChart() {
+            const ctx = document.getElementById('rsiChart').getContext('2d');
+            
+            // Simulating RSI Calculation (Simple mock for visual)
+            const rsiData = [45, 42, 48, 40, 35, 38, 30, 28, 25, 22, 20, 18, 19, 21, 22, 24, 25, 26, 24, 25];
+
+            rsiChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 20}, (_, i) => i + 1),
+                    datasets: [{
+                        label: 'RSI (14)',
+                        data: rsiData,
+                        borderColor: '#f97316', // Orange
+                        borderWidth: 2,
+                        pointRadius: 2,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 100,
+                            ticks: { stepSize: 20 }
+                        },
+                        x: { display: false }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: {
+                                line1: {
+                                    type: 'line',
+                                    yMin: 30,
+                                    yMax: 30,
+                                    borderColor: 'green',
+                                    borderWidth: 1,
+                                    borderDash: [5, 5]
+                                },
+                                line2: {
+                                    type: 'line',
+                                    yMin: 70,
+                                    yMax: 70,
+                                    borderColor: 'red',
+                                    borderWidth: 1,
+                                    borderDash: [5, 5]
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. Fundamental Chart
+        function initFundamentalChart() {
+            const ctx = document.getElementById('fundamentalChart').getContext('2d');
+            
+            fundamentalChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.fundamentals.quarters,
+                    datasets: [{
+                        label: '营业收入 (亿元)',
+                        data: data.fundamentals.revenue,
+                        backgroundColor: '#3b82f6', // Blue
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'bottom' }
+                    },
+                    scales: {
+                        y: {
+                            grid: { borderDash: [2, 4], color: '#f1f5f9' },
+                            beginAtZero: true
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function toggleFundamental(mode) {
+            const btnRev = document.getElementById('btn-revenue');
+            const btnProf = document.getElementById('btn-profit');
+            
+            if (mode === 'revenue') {
+                btnRev.className = "px-4 py-1.5 rounded-md text-sm font-medium bg-white text-slate-800 shadow transition";
+                btnProf.className = "px-4 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-800 transition";
+                
+                fundamentalChartInstance.data.datasets[0].label = '营业收入 (亿元)';
+                fundamentalChartInstance.data.datasets[0].data = data.fundamentals.revenue;
+                fundamentalChartInstance.data.datasets[0].backgroundColor = '#3b82f6';
+            } else {
+                btnProf.className = "px-4 py-1.5 rounded-md text-sm font-medium bg-white text-slate-800 shadow transition";
+                btnRev.className = "px-4 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-800 transition";
+                
+                fundamentalChartInstance.data.datasets[0].label = '净利润 (亿元)';
+                fundamentalChartInstance.data.datasets[0].data = data.fundamentals.profit;
+                // Color logic for profit (Green positive, Red negative)
+                fundamentalChartInstance.data.datasets[0].backgroundColor = data.fundamentals.profit.map(val => val >= 0 ? '#10b981' : '#ef4444');
+            }
+            fundamentalChartInstance.update();
+        }
+
+        // --- Interaction Logic ---
+
+        // Tech Slider Logic
+        const slider = document.getElementById('tech-price-slider');
+        const priceDisplay = document.getElementById('tech-price-display');
+        const adviceBox = document.getElementById('tech-advice-box');
+
+        slider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            priceDisplay.textContent = val.toFixed(2);
+            
+            // Logic for advice based on price relative to simulated support levels
+            if (val <= 10.80) {
+                adviceBox.className = "bg-green-50 border border-green-200 p-4 rounded-lg";
+                adviceBox.innerHTML = `<h4 class="font-bold text-green-800 mb-1"><i class="fas fa-check-circle mr-1"></i> 强支撑区域 (黄金坑)</h4><p class="text-sm text-green-700">价格接近长期底部 10.50，盈亏比极佳，适合左侧建仓。</p>`;
+            } else if (val > 10.80 && val < 12.00) {
+                adviceBox.className = "bg-blue-50 border border-blue-200 p-4 rounded-lg";
+                adviceBox.innerHTML = `<h4 class="font-bold text-blue-800 mb-1"><i class="fas fa-search-dollar mr-1"></i> 尝试建仓区</h4><p class="text-sm text-blue-700">进入前期成交密集区，可尝试分批低吸，设置窄幅止损。</p>`;
+            } else if (val >= 12.00 && val < 13.50) {
+                adviceBox.className = "bg-orange-50 border border-orange-200 p-4 rounded-lg";
+                adviceBox.innerHTML = `<h4 class="font-bold text-orange-800 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i> 观望区域 (下跌中继)</h4><p class="text-sm text-orange-700">当前位置尴尬，上方有均线压制，下方支撑未确认，建议等待。</p>`;
+            } else {
+                adviceBox.className = "bg-red-50 border border-red-200 p-4 rounded-lg";
+                adviceBox.innerHTML = `<h4 class="font-bold text-red-800 mb-1"><i class="fas fa-hand-paper mr-1"></i> 压力区域 (勿追高)</h4><p class="text-sm text-red-700">接近套牢盘密集区，反弹至此大概率回落，不宜买入。</p>`;
+            }
+        });
+
+        // Simulation Logic
+        function initSimulation() {
+            const btnCalc = document.getElementById('btn-calc');
+            btnCalc.addEventListener('click', calculateRiskReward);
+            
+            // Initial calc
+            calculateRiskReward();
+        }
+
+        function calculateRiskReward() {
+            const buy = parseFloat(document.getElementById('sim-buy').value);
+            const loss = parseFloat(document.getElementById('sim-loss').value);
+            const target = parseFloat(document.getElementById('sim-target').value);
+
+            const potentialLoss = buy - loss;
+            const potentialProfit = target - buy;
+            
+            // Update Text
+            document.getElementById('text-loss-amt').textContent = `-¥${potentialLoss.toFixed(2)}`;
+            document.getElementById('text-profit-amt').textContent = `+¥${potentialProfit.toFixed(2)}`;
+
+            // Validate logic
+            if (potentialLoss <= 0 || potentialProfit <= 0) {
+                document.getElementById('val-rr').textContent = "无效设置";
+                document.getElementById('val-advice').textContent = "请检查价格";
+                document.getElementById('val-advice').className = "text-xl font-bold mt-2 px-3 py-1 rounded inline-block bg-slate-200 text-slate-600";
+                return;
+            }
+
+            const rrRatio = potentialProfit / potentialLoss;
+            const rrDisplay = rrRatio.toFixed(1);
+            document.getElementById('val-rr').textContent = rrDisplay;
+
+            // Visual Bars Width
+            const total = potentialLoss + potentialProfit;
+            const lossPercent = (potentialLoss / total) * 100;
+            const profitPercent = (potentialProfit / total) * 100;
+
+            document.getElementById('bar-loss').style.width = `${lossPercent}%`;
+            document.getElementById('bar-profit').style.width = `${profitPercent}%`;
+
+            // Advice
+            const adviceEl = document.getElementById('val-advice');
+            if (rrRatio >= 3) {
+                adviceEl.textContent = "强烈推荐";
+                adviceEl.className = "text-xl font-bold mt-2 px-3 py-1 rounded inline-block bg-green-100 text-green-800";
+            } else if (rrRatio >= 2) {
+                adviceEl.textContent = "值得尝试";
+                adviceEl.className = "text-xl font-bold mt-2 px-3 py-1 rounded inline-block bg-blue-100 text-blue-800";
+            } else {
+                adviceEl.textContent = "风险过高";
+                adviceEl.className = "text-xl font-bold mt-2 px-3 py-1 rounded inline-block bg-red-100 text-red-800";
+            }
+        }
+
+        // Mobile Menu Logic
+        function setupMobileMenu() {
+            const btn = document.getElementById('mobile-menu-btn');
+            const sidebar = document.getElementById('sidebar');
+            btn.addEventListener('click', () => {
+                sidebar.classList.toggle('hidden');
+                sidebar.classList.toggle('absolute');
+                sidebar.classList.toggle('z-50');
+                sidebar.classList.toggle('h-full');
+            });
+        }
+
+    </script>
+</body>
+</html>
